@@ -19,7 +19,7 @@ ocv_add_dispatched_file_force_all(test_intrin512 TEST AVX512_SKX)
 
 ocv_add_module(core
                OPTIONAL opencv_cudev
-               WRAP java python js)
+               WRAP java objc python js)
 
 set(extra_libs "")
 
@@ -36,6 +36,9 @@ if(DEFINED WINRT AND NOT DEFINED ENABLE_WINRT_MODE_NATIVE)
 endif()
 
 if(HAVE_CUDA)
+  if(NOT HAVE_opencv_cudev)
+    message(FATAL_ERROR "CUDA: OpenCV requires enabled 'cudev' module from 'opencv_contrib' repository: https://github.com/opencv/opencv_contrib")
+  endif()
   ocv_warnings_disable(CMAKE_CXX_FLAGS -Wundef -Wenum-compare -Wunused-function -Wshadow)
 endif()
 
@@ -77,6 +80,9 @@ endif()
 if(HAVE_MEMALIGN)
   ocv_append_source_file_compile_definitions(${CMAKE_CURRENT_SOURCE_DIR}/src/alloc.cpp "HAVE_MEMALIGN=1")
 endif()
+if(HAVE_VA_INTEL_OLD_HEADER)
+  ocv_append_source_file_compile_definitions("${CMAKE_CURRENT_LIST_DIR}/src/va_intel.cpp" "HAVE_VA_INTEL_OLD_HEADER")
+endif()
 
 option(OPENCV_ENABLE_ALLOCATOR_STATS "Enable Allocator metrics" ON)
 
@@ -103,6 +109,10 @@ ocv_target_link_libraries(${the_module} PRIVATE
     "${ITT_LIBRARIES}"
     "${OPENCV_HAL_LINKER_LIBS}"
 )
+
+if(HAVE_HPX)
+  ocv_target_link_libraries(${the_module} LINK_PRIVATE "${HPX_LIBRARIES}")
+endif()
 
 ocv_add_accuracy_tests()
 ocv_add_perf_tests()

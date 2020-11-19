@@ -46,7 +46,7 @@ low light, low light values are discarded using **cv.inRange()** function.
 
 @add_toggle_cpp
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/cpp/tutorial_code/video/meanshift/meanshift.cpp)
+    [here](https://github.com/opencv/opencv/tree/master/samples/cpp/tutorial_code/video/meanshift/meanshift.cpp)
 
 -   **Code at glance:**
     @include samples/cpp/tutorial_code/video/meanshift/meanshift.cpp
@@ -54,7 +54,7 @@ low light, low light values are discarded using **cv.inRange()** function.
 
 @add_toggle_python
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/python/tutorial_code/video/meanshift/meanshift.py)
+    [here](https://github.com/opencv/opencv/tree/master/samples/python/tutorial_code/video/meanshift/meanshift.py)
 
 -   **Code at glance:**
     @include samples/python/tutorial_code/video/meanshift/meanshift.py
@@ -62,7 +62,7 @@ low light, low light values are discarded using **cv.inRange()** function.
 
 @add_toggle_java
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/java/tutorial_code/video/meanshift/MeanshiftDemo.java)
+    [here](https://github.com/opencv/opencv/tree/master/samples/java/tutorial_code/video/meanshift/MeanshiftDemo.java)
 
 -   **Code at glance:**
     @include  samples/java/tutorial_code/video/meanshift/MeanshiftDemo.java
@@ -95,7 +95,7 @@ parameters (used to be passed as search window in next iteration). See the code 
 
 @add_toggle_cpp
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/cpp/tutorial_code/video/meanshift/camshift.cpp)
+    [here](https://github.com/opencv/opencv/tree/master/samples/cpp/tutorial_code/video/meanshift/camshift.cpp)
 
 -   **Code at glance:**
     @include samples/cpp/tutorial_code/video/meanshift/camshift.cpp
@@ -103,7 +103,7 @@ parameters (used to be passed as search window in next iteration). See the code 
 
 @add_toggle_python
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/python/tutorial_code/video/meanshift/camshift.py)
+    [here](https://github.com/opencv/opencv/tree/master/samples/python/tutorial_code/video/meanshift/camshift.py)
 
 -   **Code at glance:**
     @include samples/python/tutorial_code/video/meanshift/camshift.py
@@ -111,7 +111,7 @@ parameters (used to be passed as search window in next iteration). See the code 
 
 @add_toggle_java
 -   **Downloadable code**: Click
-    [here](https://github.com/opencv/opencv/tree/3.4/samples/java/tutorial_code/video/meanshift/CamshiftDemo.java)
+    [here](https://github.com/opencv/opencv/tree/master/samples/java/tutorial_code/video/meanshift/CamshiftDemo.java)
 
 -   **Code at glance:**
     @include  samples/java/tutorial_code/video/meanshift/CamshiftDemo.java
@@ -133,5 +133,5 @@ Additional Resources
 Exercises
 ---------
 
--#  OpenCV comes with a Python [sample](https://github.com/opencv/opencv/blob/3.4/samples/python/camshift.py) for an interactive demo of camshift. Use it, hack it, understand
+-#  OpenCV comes with a Python [sample](https://github.com/opencv/opencv/blob/master/samples/python/camshift.py) for an interactive demo of camshift. Use it, hack it, understand
     it.

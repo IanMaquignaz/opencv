@@ -1,23 +1,21 @@
-Using Creative Senz3D and other Intel Perceptual Computing SDK compatible depth sensors {#tutorial_intelperc}
+Using Creative Senz3D and other Intel RealSense SDK compatible depth sensors {#tutorial_intelperc}
 =======================================================================================
 
-@prev_tutorial{tutorial_kinect_openni}
+@prev_tutorial{tutorial_orbbec_astra}
 
+**Note**: This tutorial is partially obsolete since PerC SDK has been replaced with RealSense SDK
 
-Depth sensors compatible with Intel Perceptual Computing SDK are supported through VideoCapture
+Depth sensors compatible with Intel® RealSense SDK are supported through VideoCapture
 class. Depth map, RGB image and some other formats of output can be retrieved by using familiar
 interface of VideoCapture.
 
 In order to use depth sensor with OpenCV you should do the following preliminary steps:
 
--#  Install Intel Perceptual Computing SDK (from here <http://www.intel.com/software/perceptual>).
+-#  Install Intel RealSense SDK 2.0 (from here <https://github.com/IntelRealSense/librealsense>).
 
--#  Configure OpenCV with Intel Perceptual Computing SDK support by setting WITH_INTELPERC flag in
-    CMake. If Intel Perceptual Computing SDK is found in install folders OpenCV will be built with
-    Intel Perceptual Computing SDK library (see a status INTELPERC in CMake log). If CMake process
-    doesn't find Intel Perceptual Computing SDK installation folder automatically, the user should
-    change corresponding CMake variables INTELPERC_LIB_DIR and INTELPERC_INCLUDE_DIR to the
-    proper value.
+-#  Configure OpenCV with Intel RealSense SDK support by setting WITH_LIBREALSENSE flag in
+    CMake. If Intel RealSense SDK is found in install folders OpenCV will be built with
+    Intel Realsense SDK library (see a status LIBREALSENSE in CMake log).
 
 -#  Build OpenCV.
 
@@ -37,7 +35,7 @@ VideoCapture can retrieve the following data:
 
 In order to get depth map from depth sensor use VideoCapture::operator \>\>, e. g. :
 @code{.cpp}
-    VideoCapture capture( CAP_INTELPERC );
+    VideoCapture capture( CAP_REALSENSE );
     for(;;)
     {
         Mat depthMap;
@@ -49,7 +47,7 @@ In order to get depth map from depth sensor use VideoCapture::operator \>\>, e. 
 @endcode
 For getting several data maps use VideoCapture::grab and VideoCapture::retrieve, e.g. :
 @code{.cpp}
-    VideoCapture capture(CAP_INTELPERC);
+    VideoCapture capture(CAP_REALSENSE);
     for(;;)
     {
         Mat depthMap;
@@ -69,7 +67,7 @@ For getting several data maps use VideoCapture::grab and VideoCapture::retrieve,
 For setting and getting some property of sensor\` data generators use VideoCapture::set and
 VideoCapture::get methods respectively, e.g. :
 @code{.cpp}
-    VideoCapture capture( CAP_INTELPERC );
+    VideoCapture capture(CAP_REALSENSE);
     capture.set( CAP_INTELPERC_DEPTH_GENERATOR | CAP_PROP_INTELPERC_PROFILE_IDX, 0 );
     cout << "FPS    " << capture.get( CAP_INTELPERC_DEPTH_GENERATOR+CAP_PROP_FPS ) << endl;
 @endcode
@@ -81,5 +79,5 @@ there are two flags that should be used to set/get property of the needed genera
     flag value is assumed by default if neither of the two possible values of the property is set.
 
 For more information please refer to the example of usage
-[videocapture_intelperc.cpp](https://github.com/opencv/opencv/tree/3.4/samples/cpp/videocapture_intelperc.cpp)
+[videocapture_intelperc.cpp](https://github.com/opencv/opencv/tree/master/samples/cpp/videocapture_intelperc.cpp)
 in opencv/samples/cpp folder.
