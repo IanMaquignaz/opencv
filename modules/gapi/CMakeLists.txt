@@ -38,6 +38,10 @@ if(MSVC)
   endif()
 endif()
 
+if(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")  # don't add Clang here: issue should be investigated and fixed (workaround for Apple only)
+  ocv_warnings_disable(CMAKE_CXX_FLAGS -Wrange-loop-analysis)  # https://github.com/opencv/opencv/issues/18928
+endif()
+
 file(GLOB gapi_ext_hdrs
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/*.hpp"
     "${CMAKE_CURRENT_LIST_DIR}/include/opencv2/${name}/*.hpp"
@@ -103,6 +107,7 @@ set(gapi_srcs
 
     # Executor
     src/executor/gexecutor.cpp
+    src/executor/gtbbexecutor.cpp
     src/executor/gstreamingexecutor.cpp
     src/executor/gasync.cpp
 
@@ -152,6 +157,9 @@ set(gapi_srcs
     src/api/s11n.cpp
     src/backends/common/serialization.cpp
 
+    # Streaming backend
+    src/backends/streaming/gstreamingbackend.cpp
+
     # Python bridge
     src/backends/ie/bindings_ie.cpp
     )
@@ -190,6 +198,10 @@ ocv_add_accuracy_tests(${__test_extra_deps})
 if(TARGET opencv_test_gapi)
   target_include_directories(opencv_test_gapi PRIVATE "${CMAKE_CURRENT_LIST_DIR}/src")
   target_link_libraries(opencv_test_gapi PRIVATE ade)
+endif()
+
+if(HAVE_TBB AND TARGET opencv_test_gapi)
+  ocv_target_link_libraries(opencv_test_gapi PRIVATE tbb)
 endif()
 
 if(HAVE_FREETYPE)
