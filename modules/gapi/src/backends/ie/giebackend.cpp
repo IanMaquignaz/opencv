@@ -263,14 +263,6 @@ struct IEUnit {
             // Still, constant data is to set only once.
             this_request.SetBlob(p.first, wrapIE(p.second.first, p.second.second));
         }
-        // Bind const data to infer request
-        for (auto &&p : params.const_inputs) {
-            // FIXME: SetBlob is known to be inefficient,
-            // it is worth to make a customizable "initializer" and pass the
-            // cv::Mat-wrapped blob there to support IE's optimal "GetBlob idiom"
-            // Still, constant data is to set only once.
-            this_request.SetBlob(p.first, wrapIE(p.second.first, p.second.second));
-        }
 
         return {this_plugin, this_network, this_request};
     }
@@ -469,7 +461,7 @@ void cv::gimpl::ie::GIEExecutable::run(std::vector<InObj>  &&input_objs,
                              return arg.get<cv::gimpl::RcDesc>().shape;
                          });
     // - Output parameters.
-    for (const auto &out_it : ade::util::indexed(op.outs)) {
+    for (const auto out_it : ade::util::indexed(op.outs)) {
         // FIXME: Can the same GArg type resolution mechanism be reused here?
         const auto out_port  = ade::util::index(out_it);
         const auto out_desc  = ade::util::value(out_it);
