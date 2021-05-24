@@ -43,6 +43,8 @@
 #define OPENCV_OPENCL_HPP
 
 #include "opencv2/core.hpp"
+#include <typeinfo>
+#include <typeindex>
 
 namespace cv { namespace ocl {
 
@@ -70,10 +72,12 @@ class CV_EXPORTS Image2D;
 class CV_EXPORTS_W_SIMPLE Device
 {
 public:
-    CV_WRAP Device();
+    CV_WRAP Device() CV_NOEXCEPT;
     explicit Device(void* d);
     Device(const Device& d);
     Device& operator = (const Device& d);
+    Device(Device&& d) CV_NOEXCEPT;
+    Device& operator = (Device&& d) CV_NOEXCEPT;
     CV_WRAP ~Device();
 
     void set(void* d);
@@ -245,11 +249,13 @@ protected:
 class CV_EXPORTS Context
 {
 public:
-    Context();
+    Context() CV_NOEXCEPT;
     explicit Context(int dtype);  //!< @deprecated
     ~Context();
     Context(const Context& c);
     Context& operator= (const Context& c);
+    Context(Context&& c) CV_NOEXCEPT;
+    Context& operator = (Context&& c) CV_NOEXCEPT;
 
     /** @deprecated */
     bool create();
@@ -273,6 +279,12 @@ public:
     /** @returns cl_context value */
     void* ptr() const;
 
+    /**
+     * @brief Get OpenCL context property specified on context creation
+     * @param propertyId Property id (CL_CONTEXT_* as defined in cl_context_properties type)
+     * @returns Property value if property was specified on clCreateContext, or NULL if context created without the property
+     */
+    void* getOpenCLContextProperty(int propertyId) const;
 
     bool useSVM() const;
     void setUseSVM(bool enabled);
@@ -286,6 +298,21 @@ public:
 
     void release();
 
+    class CV_EXPORTS UserContext {
+    public:
+        virtual ~UserContext();
+    };
+    template <typename T>
+    inline void setUserContext(const std::shared_ptr<T>& userContext) {
+        setUserContext(typeid(T), userContext);
+    }
+    template <typename T>
+    inline std::shared_ptr<T> getUserContext() {
+        return std::dynamic_pointer_cast<T>(getUserContext(typeid(T)));
+    }
+    void setUserContext(std::type_index typeId, const std::shared_ptr<UserContext>& userContext);
+    std::shared_ptr<UserContext> getUserContext(std::type_index typeId);
+
     struct Impl;
     inline Impl* getImpl() const { return (Impl*)p; }
     inline bool empty() const { return !p; }
@@ -298,10 +325,12 @@ public:
 class CV_EXPORTS Platform
 {
 public:
-    Platform();
+    Platform() CV_NOEXCEPT;
     ~Platform();
     Platform(const Platform& p);
     Platform& operator = (const Platform& p);
+    Platform(Platform&& p) CV_NOEXCEPT;
+    Platform& operator = (Platform&& p) CV_NOEXCEPT;
 
     void* ptr() const;
 
@@ -357,11 +386,13 @@ void initializeContextFromHandle(Context& ctx, void* platform, void* context, vo
 class CV_EXPORTS Queue
 {
 public:
-    Queue();
+    Queue() CV_NOEXCEPT;
     explicit Queue(const Context& c, const Device& d=Device());
     ~Queue();
     Queue(const Queue& q);
     Queue& operator = (const Queue& q);
+    Queue(Queue&& q) CV_NOEXCEPT;
+    Queue& operator = (Queue&& q) CV_NOEXCEPT;
 
     bool create(const Context& c=Context(), const Device& d=Device());
     void finish();
@@ -384,7 +415,7 @@ class CV_EXPORTS KernelArg
 public:
     enum { LOCAL=1, READ_ONLY=2, WRITE_ONLY=4, READ_WRITE=6, CONSTANT=8, PTR_ONLY = 16, NO_SIZE=256 };
     KernelArg(int _flags, UMat* _m, int wscale=1, int iwscale=1, const void* _obj=0, size_t _sz=0);
-    KernelArg();
+    KernelArg() CV_NOEXCEPT;
 
     static KernelArg Local(size_t localMemSize)
     { return KernelArg(LOCAL, 0, 1, 1, 0, localMemSize); }
@@ -421,13 +452,15 @@ public:
 class CV_EXPORTS Kernel
 {
 public:
-    Kernel();
+    Kernel() CV_NOEXCEPT;
     Kernel(const char* kname, const Program& prog);
     Kernel(const char* kname, const ProgramSource& prog,
            const String& buildopts = String(), String* errmsg=0);
     ~Kernel();
     Kernel(const Kernel& k);
     Kernel& operator = (const Kernel& k);
+    Kernel(Kernel&& k) CV_NOEXCEPT;
+    Kernel& operator = (Kernel&& k) CV_NOEXCEPT;
 
     bool empty() const;
     bool create(const char* kname, const Program& prog);
@@ -498,12 +531,13 @@ protected:
 class CV_EXPORTS Program
 {
 public:
-    Program();
+    Program() CV_NOEXCEPT;
     Program(const ProgramSource& src,
             const String& buildflags, String& errmsg);
     Program(const Program& prog);
-
     Program& operator = (const Program& prog);
+    Program(Program&& prog) CV_NOEXCEPT;
+    Program& operator = (Program&& prog) CV_NOEXCEPT;
     ~Program();
 
     bool create(const ProgramSource& src,
@@ -544,13 +578,15 @@ class CV_EXPORTS ProgramSource
 public:
     typedef uint64 hash_t; // deprecated
 
-    ProgramSource();
+    ProgramSource() CV_NOEXCEPT;
     explicit ProgramSource(const String& module, const String& name, const String& codeStr, const String& codeHash);
     explicit ProgramSource(const String& prog); // deprecated
     explicit ProgramSource(const char* prog); // deprecated
     ~ProgramSource();
     ProgramSource(const ProgramSource& prog);
     ProgramSource& operator = (const ProgramSource& prog);
+    ProgramSource(ProgramSource&& prog) CV_NOEXCEPT;
+    ProgramSource& operator = (ProgramSource&& prog) CV_NOEXCEPT;
 
     const String& source() const; // deprecated
     hash_t hash() const; // deprecated
@@ -614,7 +650,7 @@ protected:
 class CV_EXPORTS PlatformInfo
 {
 public:
-    PlatformInfo();
+    PlatformInfo() CV_NOEXCEPT;
     /**
      * @param id pointer cl_platform_id (cl_platform_id*)
      */
@@ -623,6 +659,8 @@ public:
 
     PlatformInfo(const PlatformInfo& i);
     PlatformInfo& operator =(const PlatformInfo& i);
+    PlatformInfo(PlatformInfo&& i) CV_NOEXCEPT;
+    PlatformInfo& operator = (PlatformInfo&& i) CV_NOEXCEPT;
 
     String name() const;
     String vendor() const;
@@ -683,7 +721,7 @@ CV_EXPORTS void buildOptionsAddMatrixDescription(String& buildOptions, const Str
 class CV_EXPORTS Image2D
 {
 public:
-    Image2D();
+    Image2D() CV_NOEXCEPT;
 
     /**
     @param src UMat object from which to get image properties and data
@@ -696,6 +734,8 @@ public:
     ~Image2D();
 
     Image2D & operator = (const Image2D & i);
+    Image2D(Image2D &&) CV_NOEXCEPT;
+    Image2D &operator=(Image2D &&) CV_NOEXCEPT;
 
     /** Indicates if creating an aliased image should succeed.
     Depends on the underlying platform and the dimensions of the UMat.

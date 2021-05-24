@@ -113,10 +113,6 @@
 
 #include "opencv2/core/opencl/runtime/opencl_core.hpp"
 
-#ifdef HAVE_DIRECTX
-#include "directx.hpp"
-#endif
-
 #ifdef HAVE_OPENCL_SVM
 #include "opencv2/core/opencl/runtime/opencl_svm_20.hpp"
 #include "opencv2/core/opencl/runtime/opencl_svm_hsa_extension.hpp"
@@ -1451,7 +1447,7 @@ struct Platform::Impl
     bool initialized;
 };
 
-Platform::Platform()
+Platform::Platform() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -1477,6 +1473,23 @@ Platform& Platform::operator = (const Platform& pl)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+Platform::Platform(Platform&& pl) CV_NOEXCEPT
+{
+    p = pl.p;
+    pl.p = nullptr;
+}
+
+Platform& Platform::operator = (Platform&& pl) CV_NOEXCEPT
+{
+    if (this != &pl) {
+        if(p)
+            p->release();
+        p = pl.p;
+        pl.p = nullptr;
+    }
     return *this;
 }
 
@@ -1677,7 +1690,7 @@ struct Device::Impl
 };
 
 
-Device::Device()
+Device::Device() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -1703,6 +1716,23 @@ Device& Device::operator = (const Device& d)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+Device::Device(Device&& d) CV_NOEXCEPT
+{
+    p = d.p;
+    d.p = nullptr;
+}
+
+Device& Device::operator = (Device&& d) CV_NOEXCEPT
+{
+    if (this != &d) {
+        if(p)
+            p->release();
+        p = d.p;
+        d.p = nullptr;
+    }
     return *this;
 }
 
@@ -2333,9 +2363,6 @@ protected:
         , contextId(CV_XADD(&g_contextId, 1))
         , configuration(configuration_)
         , handle(0)
-#ifdef HAVE_DIRECTX
-        , p_directx_impl(0)
-#endif
 #ifdef HAVE_OPENCL_SVM
         , svmInitialized(false)
 #endif
@@ -2361,10 +2388,9 @@ protected:
                 handle = NULL;
             }
             devices.clear();
-#ifdef HAVE_DIRECTX
-            directx::internal::deleteDirectXImpl(&p_directx_impl);
-#endif
         }
+
+        userContextStorage.clear();
 
         {
             cv::AutoLock lock(cv::getInitializationMutex());
@@ -2671,18 +2697,20 @@ public:
         return *bufferPoolHostPtr_.get();
     }
 
-#ifdef HAVE_DIRECTX
-    directx::internal::OpenCLDirectXImpl* p_directx_impl;
-
-    directx::internal::OpenCLDirectXImpl* getDirectXImpl()
-    {
-        if (!p_directx_impl)
-        {
-            p_directx_impl = directx::internal::createDirectXImpl();
-        }
-        return p_directx_impl;
+    std::map<std::type_index, std::shared_ptr<UserContext>> userContextStorage;
+    cv::Mutex userContextMutex;
+    void setUserContext(std::type_index typeId, const std::shared_ptr<UserContext>& userContext) {
+        cv::AutoLock lock(userContextMutex);
+        userContextStorage[typeId] = userContext;
     }
-#endif
+    std::shared_ptr<UserContext> getUserContext(std::type_index typeId) {
+        cv::AutoLock lock(userContextMutex);
+        auto it = userContextStorage.find(typeId);
+        if (it != userContextStorage.end())
+            return it->second;
+        else
+            return nullptr;
+    }
 
 #ifdef HAVE_OPENCL_SVM
     bool svmInitialized;
@@ -2834,7 +2862,7 @@ public:
 };
 
 
-Context::Context()
+Context::Context() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -2919,6 +2947,23 @@ Context& Context::operator = (const Context& c)
     return *this;
 }
 
+Context::Context(Context&& c) CV_NOEXCEPT
+{
+    p = c.p;
+    c.p = nullptr;
+}
+
+Context& Context::operator = (Context&& c) CV_NOEXCEPT
+{
+    if (this != &c) {
+        if(p)
+            p->release();
+        p = c.p;
+        c.p = nullptr;
+    }
+    return *this;
+}
+
 void* Context::ptr() const
 {
     return p == NULL ? NULL : p->handle;
@@ -2985,6 +3030,25 @@ Context Context::create(const std::string& configuration)
     return ctx;
 }
 
+void* Context::getOpenCLContextProperty(int propertyId) const
+{
+    if (p == NULL)
+        return nullptr;
+    ::size_t size = 0;
+    CV_OCL_CHECK(clGetContextInfo(p->handle, CL_CONTEXT_PROPERTIES, 0, NULL, &size));
+    std::vector<cl_context_properties> prop(size / sizeof(cl_context_properties), (cl_context_properties)0);
+    CV_OCL_CHECK(clGetContextInfo(p->handle, CL_CONTEXT_PROPERTIES, size, prop.data(), NULL));
+    for (size_t i = 0; i < prop.size(); i += 2)
+    {
+        if (prop[i] == (cl_context_properties)propertyId)
+        {
+            CV_LOG_DEBUG(NULL, "OpenCL: found context property=" << propertyId << ") => " << (void*)prop[i + 1]);
+            return (void*)prop[i + 1];
+        }
+    }
+    return nullptr;
+}
+
 #ifdef HAVE_OPENCL_SVM
 bool Context::useSVM() const
 {
@@ -3046,6 +3110,21 @@ CV_EXPORTS bool useSVM(UMatUsageFlags usageFlags)
 } // namespace cv::ocl::svm
 #endif // HAVE_OPENCL_SVM
 
+Context::UserContext::~UserContext()
+{
+}
+
+void Context::setUserContext(std::type_index typeId, const std::shared_ptr<Context::UserContext>& userContext)
+{
+    CV_Assert(p);
+    p->setUserContext(typeId, userContext);
+}
+
+std::shared_ptr<Context::UserContext> Context::getUserContext(std::type_index typeId)
+{
+    CV_Assert(p);
+    return p->getUserContext(typeId);
+}
 
 static void get_platform_name(cl_platform_id id, String& name)
 {
@@ -3231,7 +3310,7 @@ struct Queue::Impl
     cv::ocl::Queue profiling_queue_;
 };
 
-Queue::Queue()
+Queue::Queue() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -3257,6 +3336,23 @@ Queue& Queue::operator = (const Queue& q)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+Queue::Queue(Queue&& q) CV_NOEXCEPT
+{
+    p = q.p;
+    q.p = nullptr;
+}
+
+Queue& Queue::operator = (Queue&& q) CV_NOEXCEPT
+{
+    if (this != &q) {
+        if(p)
+            p->release();
+        p = q.p;
+        q.p = nullptr;
+    }
     return *this;
 }
 
@@ -3315,7 +3411,7 @@ static cl_command_queue getQueue(const Queue& q)
 
 /////////////////////////////////////////// KernelArg /////////////////////////////////////////////
 
-KernelArg::KernelArg()
+KernelArg::KernelArg() CV_NOEXCEPT
     : flags(0), m(0), obj(0), sz(0), wscale(1), iwscale(1)
 {
 }
@@ -3457,7 +3553,7 @@ static void CL_CALLBACK oclCleanupCallback(cl_event e, cl_int, void *p)
 
 namespace cv { namespace ocl {
 
-Kernel::Kernel()
+Kernel::Kernel() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -3490,6 +3586,23 @@ Kernel& Kernel::operator = (const Kernel& k)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+Kernel::Kernel(Kernel&& k) CV_NOEXCEPT
+{
+    p = k.p;
+    k.p = nullptr;
+}
+
+Kernel& Kernel::operator = (Kernel&& k) CV_NOEXCEPT
+{
+    if (this != &k) {
+        if(p)
+            p->release();
+        p = k.p;
+        k.p = nullptr;
+    }
     return *this;
 }
 
@@ -4047,7 +4160,7 @@ struct ProgramSource::Impl
 };
 
 
-ProgramSource::ProgramSource()
+ProgramSource::ProgramSource() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -4088,6 +4201,23 @@ ProgramSource& ProgramSource::operator = (const ProgramSource& prog)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+ProgramSource::ProgramSource(ProgramSource&& prog) CV_NOEXCEPT
+{
+    p = prog.p;
+    prog.p = nullptr;
+}
+
+ProgramSource& ProgramSource::operator = (ProgramSource&& prog) CV_NOEXCEPT
+{
+    if (this != &prog) {
+        if(p)
+            p->release();
+        p = prog.p;
+        prog.p = nullptr;
+    }
     return *this;
 }
 
@@ -4556,7 +4686,10 @@ struct Program::Impl
 };
 
 
-Program::Program() { p = 0; }
+Program::Program() CV_NOEXCEPT
+{
+    p = 0;
+}
 
 Program::Program(const ProgramSource& src,
         const String& buildflags, String& errmsg)
@@ -4580,6 +4713,23 @@ Program& Program::operator = (const Program& prog)
     if(p)
         p->release();
     p = newp;
+    return *this;
+}
+
+Program::Program(Program&& prog) CV_NOEXCEPT
+{
+    p = prog.p;
+    prog.p = nullptr;
+}
+
+Program& Program::operator = (Program&& prog) CV_NOEXCEPT
+{
+    if (this != &prog) {
+        if(p)
+            p->release();
+        p = prog.p;
+        prog.p = nullptr;
+    }
     return *this;
 }
 
@@ -6608,7 +6758,7 @@ struct PlatformInfo::Impl
     int versionMinor_;
 };
 
-PlatformInfo::PlatformInfo()
+PlatformInfo::PlatformInfo() CV_NOEXCEPT
 {
     p = 0;
 }
@@ -6640,6 +6790,23 @@ PlatformInfo& PlatformInfo::operator =(const PlatformInfo& i)
         if (p)
             p->release();
         p = i.p;
+    }
+    return *this;
+}
+
+PlatformInfo::PlatformInfo(PlatformInfo&& i) CV_NOEXCEPT
+{
+    p = i.p;
+    i.p = nullptr;
+}
+
+PlatformInfo& PlatformInfo::operator = (PlatformInfo&& i) CV_NOEXCEPT
+{
+    if (this != &i) {
+        if(p)
+            p->release();
+        p = i.p;
+        i.p = nullptr;
     }
     return *this;
 }
@@ -7184,7 +7351,7 @@ struct Image2D::Impl
     cl_mem handle;
 };
 
-Image2D::Image2D()
+Image2D::Image2D() CV_NOEXCEPT
 {
     p = NULL;
 }
@@ -7238,6 +7405,23 @@ Image2D & Image2D::operator = (const Image2D & i)
         if (p)
             p->release();
         p = i.p;
+    }
+    return *this;
+}
+
+Image2D::Image2D(Image2D&& i) CV_NOEXCEPT
+{
+    p = i.p;
+    i.p = nullptr;
+}
+
+Image2D& Image2D::operator = (Image2D&& i) CV_NOEXCEPT
+{
+    if (this != &i) {
+        if (p)
+            p->release();
+        p = i.p;
+        i.p = nullptr;
     }
     return *this;
 }
@@ -7348,16 +7532,5 @@ uint64 Timer::durationNS() const
 }
 
 }} // namespace
-
-#ifdef HAVE_DIRECTX
-namespace cv { namespace directx { namespace internal {
-OpenCLDirectXImpl* getDirectXImpl(ocl::Context& ctx)
-{
-    ocl::Context::Impl* i = ctx.getImpl();
-    CV_Assert(i);
-    return i->getDirectXImpl();
-}
-}}} // namespace cv::directx::internal
-#endif
 
 #endif // HAVE_OPENCL

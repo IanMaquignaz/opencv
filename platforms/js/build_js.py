@@ -115,7 +115,7 @@ class Builder:
                "-DWITH_GPHOTO2=OFF",
                "-DWITH_LAPACK=OFF",
                "-DWITH_ITT=OFF",
-               "-DWITH_QUIRC=OFF",
+               "-DWITH_QUIRC=ON",
                "-DBUILD_ZLIB=ON",
                "-DBUILD_opencv_apps=OFF",
                "-DBUILD_opencv_calib3d=ON",
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     log.debug("Args: %s", args)
 
-    os.environ["OPENCV_JS_WHITELIST"] = args.config
+    os.environ["OPENCV_JS_WHITELIST"] = os.path.abspath(args.config)
 
     if 'EMMAKEN_JUST_CONFIGURE' in os.environ:
         del os.environ['EMMAKEN_JUST_CONFIGURE']  # avoid linker errors with NODERAWFS message then using 'emcmake' launcher

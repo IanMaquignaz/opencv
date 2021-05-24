@@ -1842,7 +1842,7 @@ void ChessBoardDetector::generateQuads(const cv::Mat& image_, int flags)
         if (boardIdx != parentIdx && (boardIdx < 0 || contour_child_counter[boardIdx] < contour_child_counter[parentIdx]))
             boardIdx = parentIdx;
 
-        contour_quads.push_back(QuadCountour(pt, parentIdx));
+        contour_quads.emplace_back(pt, parentIdx);
     }
 
     size_t total = contour_quads.size();
@@ -2266,7 +2266,7 @@ bool findCirclesGrid( InputArray _image, Size patternSize,
         }
     }
 
-    if (!H.empty())  // undone rectification
+    if (!centers.empty() && !H.empty())  // undone rectification
     {
         Mat orgPointsMat;
         transform(centers, orgPointsMat, H.inv());

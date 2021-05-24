@@ -7,6 +7,7 @@
 
 #include <opencv2/core/async.hpp>
 #include <opencv2/core/detail/async_promise.hpp>
+#include <opencv2/core/utils/logger.hpp>
 
 #include <stdexcept>
 
@@ -144,7 +145,30 @@ AsyncArray testAsyncException()
     return p.getArrayResult();
 }
 
-//! @}
-}} // namespace
+namespace fs {
+    CV_EXPORTS_W cv::String getCacheDirectoryForDownloads();
+} // namespace fs
+
+//! @}  // core_utils
+}  // namespace cv::utils
+
+//! @cond IGNORED
+
+CV_WRAP static inline
+int setLogLevel(int level)
+{
+    // NB: Binding generators doesn't work with enums properly yet, so we define separate overload here
+    return cv::utils::logging::setLogLevel((cv::utils::logging::LogLevel)level);
+}
+
+CV_WRAP static inline
+int getLogLevel()
+{
+    return cv::utils::logging::getLogLevel();
+}
+
+//! @endcond IGNORED
+
+} // namespaces cv /  utils
 
 #endif // OPENCV_CORE_BINDINGS_UTILS_HPP

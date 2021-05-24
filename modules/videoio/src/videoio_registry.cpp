@@ -84,7 +84,7 @@ static const struct VideoBackendInfo builtin_backends[] =
 
 #ifdef HAVE_MSMF
     DECLARE_STATIC_BACKEND(CAP_MSMF, "MSMF", MODE_CAPTURE_ALL | MODE_WRITER, cvCreateCapture_MSMF, cvCreateCapture_MSMF, cvCreateVideoWriter_MSMF),
-#elif defined(ENABLE_PLUGINS)
+#elif defined(ENABLE_PLUGINS) && defined(_WIN32)
     DECLARE_DYNAMIC_BACKEND(CAP_MSMF, "MSMF", MODE_CAPTURE_ALL | MODE_WRITER),
 #endif
 
@@ -140,8 +140,30 @@ static const struct VideoBackendInfo builtin_backends[] =
 #ifdef HAVE_XINE
     DECLARE_STATIC_BACKEND(CAP_XINE, "XINE", MODE_CAPTURE_BY_FILENAME, createXINECapture, 0, 0),
 #endif
+#if defined(HAVE_ANDROID_MEDIANDK) || defined(HAVE_ANDROID_NATIVE_CAMERA)
+    DECLARE_STATIC_BACKEND(CAP_ANDROID, "ANDROID_NATIVE",
 #ifdef HAVE_ANDROID_MEDIANDK
-    DECLARE_STATIC_BACKEND(CAP_ANDROID, "ANDROID_MEDIANDK", MODE_CAPTURE_BY_FILENAME, createAndroidCapture_file, 0, 0),
+                           MODE_CAPTURE_BY_FILENAME
+#else
+                           0
+#endif
+                           |
+#ifdef HAVE_ANDROID_NATIVE_CAMERA
+                           MODE_CAPTURE_BY_INDEX,
+#else
+                           0,
+#endif
+#ifdef HAVE_ANDROID_MEDIANDK
+                           createAndroidCapture_file,
+#else
+                           0,
+#endif
+#ifdef HAVE_ANDROID_NATIVE_CAMERA
+                           createAndroidCapture_cam,
+#else
+                           0,
+#endif
+                           0),
 #endif
     // dropped backends: MIL, TYZX
 };
@@ -380,6 +402,81 @@ bool hasBackend(VideoCaptureAPIs api)
     }
     return false;
 }
+
+bool isBackendBuiltIn(VideoCaptureAPIs api)
+{
+    std::vector<VideoBackendInfo> backends = VideoBackendRegistry::getInstance().getEnabledBackends();
+    for (size_t i = 0; i < backends.size(); i++)
+    {
+        const VideoBackendInfo& info = backends[i];
+        if (api == info.id)
+        {
+            CV_Assert(!info.backendFactory.empty());
+            return info.backendFactory->isBuiltIn();
+        }
+    }
+    return false;
+}
+
+std::string getCameraBackendPluginVersion(VideoCaptureAPIs api,
+    CV_OUT int& version_ABI,
+    CV_OUT int& version_API
+)
+{
+    const std::vector<VideoBackendInfo> backends = VideoBackendRegistry::getInstance().getAvailableBackends_CaptureByIndex();
+    for (size_t i = 0; i < backends.size(); i++)
+    {
+        const VideoBackendInfo& info = backends[i];
+        if (api == info.id)
+        {
+            CV_Assert(!info.backendFactory.empty());
+            CV_Assert(!info.backendFactory->isBuiltIn());
+            return getCapturePluginVersion(info.backendFactory, version_ABI, version_API);
+        }
+    }
+    CV_Error(Error::StsError, "Unknown or wrong backend ID");
+}
+
+std::string getStreamBackendPluginVersion(VideoCaptureAPIs api,
+    CV_OUT int& version_ABI,
+    CV_OUT int& version_API
+)
+{
+    const std::vector<VideoBackendInfo> backends = VideoBackendRegistry::getInstance().getAvailableBackends_CaptureByFilename();
+    for (size_t i = 0; i < backends.size(); i++)
+    {
+        const VideoBackendInfo& info = backends[i];
+        if (api == info.id)
+        {
+            CV_Assert(!info.backendFactory.empty());
+            CV_Assert(!info.backendFactory->isBuiltIn());
+            return getCapturePluginVersion(info.backendFactory, version_ABI, version_API);
+        }
+    }
+    CV_Error(Error::StsError, "Unknown or wrong backend ID");
+}
+
+
+/** @brief Returns description and ABI/API version of videoio plugin's writer interface */
+std::string getWriterBackendPluginVersion(VideoCaptureAPIs api,
+    CV_OUT int& version_ABI,
+    CV_OUT int& version_API
+)
+{
+    const std::vector<VideoBackendInfo> backends = VideoBackendRegistry::getInstance().getAvailableBackends_Writer();
+    for (size_t i = 0; i < backends.size(); i++)
+    {
+        const VideoBackendInfo& info = backends[i];
+        if (api == info.id)
+        {
+            CV_Assert(!info.backendFactory.empty());
+            CV_Assert(!info.backendFactory->isBuiltIn());
+            return getWriterPluginVersion(info.backendFactory, version_ABI, version_API);
+        }
+    }
+    CV_Error(Error::StsError, "Unknown or wrong backend ID");
+}
+
 
 } // namespace registry
 

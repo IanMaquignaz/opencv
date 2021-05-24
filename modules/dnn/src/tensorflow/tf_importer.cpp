@@ -12,6 +12,7 @@ Implementation of Tensorflow models parser
 #include "../precomp.hpp"
 
 #include <opencv2/core/utils/logger.defines.hpp>
+#include <opencv2/dnn/shape_utils.hpp>
 #undef CV_LOG_STRIP_LEVEL
 #define CV_LOG_STRIP_LEVEL CV_LOG_LEVEL_DEBUG + 1
 #include <opencv2/core/utils/logger.hpp>
@@ -295,6 +296,22 @@ DataLayout getDataLayout(
     return it != data_layouts.end() ? it->second : DATA_LAYOUT_UNKNOWN;
 }
 
+static
+bool hasAllOnes(const Mat &inputs, int startPos, int endPos)
+{
+    CV_CheckLE(inputs.dims, 2, "");
+    CV_CheckGE(startPos, 0, "");
+    CV_CheckLE(startPos, endPos, "");
+    CV_CheckLT((size_t)endPos, inputs.total(), "");
+
+    for (int i = startPos; i < endPos; i++)
+    {
+        if (inputs.at<int>(i) != 1 && inputs.at<int>(i) != -1)
+            return false;
+    }
+    return true;
+}
+
 void setStrides(LayerParams &layerParams, const tensorflow::NodeDef &layer)
 {
     if (hasLayerAttr(layer, "strides"))
@@ -490,6 +507,9 @@ protected:
     std::map<String, Mat> sharedWeights;
 
     std::map<String, int> layer_id;
+
+private:
+    void addPermuteLayer(const int* order, const std::string& permName, Pin& inpId);
 };
 
 TFImporter::TFImporter(Net& net, const char *model, const char *config)
@@ -895,6 +915,17 @@ void TFImporter::populateNet()
     CV_LOG_DEBUG(NULL, "DNN/TF: ===================== Import completed =====================");
 }
 
+void TFImporter::addPermuteLayer(const int* order, const std::string& permName, Pin& inpId)
+{
+    LayerParams permLP;
+    permLP.set("order", DictValue::arrayInt<const int*>(order, 4));
+    CV_Assert(layer_id.find(permName) == layer_id.end());
+    int permId = dstNet.addLayer(permName, "Permute", permLP);
+    layer_id[permName] = permId;
+    connect(layer_id, dstNet, inpId, permId, 0);
+    inpId = Pin(permName);
+}
+
 void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
 {
     tensorflow::NodeDef layer = layer_;
@@ -1276,37 +1307,49 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
             if (value_id.find(layer.input(1)) != value_id.end())
             {
                 Mat newShape = getTensorContent(getConstBlob(layer, value_id, 1));
-                if (newShape.total() == 4)
+                int newShapeSize = newShape.total();
+                bool hasSwap = false;
+                if (newShapeSize == 4 && hasAllOnes(newShape, 0, 2))
                 {
                     // NHWC->NCHW
                     std::swap(*newShape.ptr<int32_t>(0, 2), *newShape.ptr<int32_t>(0, 3));
                     std::swap(*newShape.ptr<int32_t>(0, 1), *newShape.ptr<int32_t>(0, 2));
+                    hasSwap = true;
                 }
                 if (inpLayout == DATA_LAYOUT_NHWC)
                 {
-                    if (newShape.total() != 4 || newShape.at<int>(1) == 1)
+                    if (newShapeSize >= 2 || newShape.at<int>(1) == 1)
                     {
-                        LayerParams permLP;
                         int order[] = {0, 2, 3, 1};  // From OpenCV's NCHW to NHWC.
-                        permLP.set("order", DictValue::arrayInt<int*>(order, 4));
-
-                        std::string permName = name + "/nchw";
-                        CV_Assert(layer_id.find(permName) == layer_id.end());
-                        int permId = dstNet.addLayer(permName, "Permute", permLP);
-                        layer_id[permName] = permId;
-                        connect(layer_id, dstNet, inpId, permId, 0);
-                        inpId = Pin(permName);
-                        inpLayout = DATA_LAYOUT_NCHW;
+                        addPermuteLayer(order, name + "/nhwc", inpId);
+                        if (newShapeSize < 4)
+                        {
+                            inpLayout = DATA_LAYOUT_NCHW;
+                        }
+                        else
+                        {
+                            inpLayout = DATA_LAYOUT_NHWC;
+                        }
                     }
                 }
-                layerParams.set("dim", DictValue::arrayInt<int*>(newShape.ptr<int>(), newShape.total()));
+                layerParams.set("dim", DictValue::arrayInt<int*>(newShape.ptr<int>(), newShapeSize));
 
                 int id = dstNet.addLayer(name, "Reshape", layerParams);
                 layer_id[name] = id;
 
                 // one input only
                 connect(layer_id, dstNet, inpId, id, 0);
-                data_layouts[name] = newShape.total() == 2 ? DATA_LAYOUT_PLANAR : inpLayout;
+                inpId = Pin(name);
+
+                if ((inpLayout == DATA_LAYOUT_NHWC || inpLayout == DATA_LAYOUT_UNKNOWN || inpLayout == DATA_LAYOUT_PLANAR) &&
+                    newShapeSize == 4 && !hasSwap)
+                {
+                    int order[] = {0, 3, 1, 2};  // Transform back to OpenCV's NCHW.
+                    addPermuteLayer(order, name + "/nchw", inpId);
+                    inpLayout = DATA_LAYOUT_NCHW;
+                }
+
+                data_layouts[name] = newShapeSize == 2 ? DATA_LAYOUT_PLANAR : inpLayout;
             }
             else
             {
@@ -1783,6 +1826,7 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
             {
                 // Check if all the inputs have the same shape.
                 bool equalInpShapes = true;
+                bool isShapeOnes = false;
                 MatShape outShape0;
                 for (int ii = 0; ii < num_inputs && !netInputShapes.empty(); ii++)
                 {
@@ -1803,12 +1847,14 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
                     else if (outShape != outShape0)
                     {
                         equalInpShapes = false;
+                        isShapeOnes = isAllOnes(outShape, 2, outShape.size()) ||
+                                      isAllOnes(outShape0, 2, outShape0.size());
                         break;
                     }
                 }
 
                 int id;
-                if (equalInpShapes || netInputShapes.empty())
+                if (equalInpShapes || netInputShapes.empty() || (!equalInpShapes && isShapeOnes))
                 {
                     layerParams.set("operation", type == "RealDiv" ? "div" : "prod");
                     id = dstNet.addLayer(name, "Eltwise", layerParams);
@@ -2314,12 +2360,9 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
                         // To keep correct order after squeeze dims we first need to change layout from NCHW to NHWC
                         LayerParams permLP;
                         int order[] = {0, 2, 3, 1};  // From OpenCV's NCHW to NHWC.
-                        permLP.set("order", DictValue::arrayInt<int*>(order, 4));
                         std::string permName = name + "/nchw";
-                        CV_Assert(layer_id.find(permName) == layer_id.end());
-                        int permId = dstNet.addLayer(permName, "Permute", permLP);
-                        layer_id[permName] = permId;
-                        connect(layer_id, dstNet, Pin(name), permId, 0);
+                        Pin inpId = Pin(name);
+                        addPermuteLayer(order, permName, inpId);
 
                         LayerParams squeezeLp;
                         std::string squeezeName = name + "/squeeze";
@@ -2329,6 +2372,38 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
                         int squeezeId = dstNet.addLayer(squeezeName, "Flatten", squeezeLp);
                         layer_id[squeezeName] = squeezeId;
                         connect(layer_id, dstNet, Pin(permName), squeezeId, 0);
+                    }
+                }
+                else if (axis == 1)
+                {
+                    int order[] = {0, 2, 3, 1};  // From OpenCV's NCHW to NHWC.
+                    Pin inpId = parsePin(layer.input(0));
+                    addPermuteLayer(order, name + "/nhwc", inpId);
+
+                    layerParams.set("pool", type == "Mean" ? "ave" : "sum");
+                    layerParams.set("kernel_h", 1);
+                    layerParams.set("global_pooling_w", true);
+                    int id = dstNet.addLayer(name, "Pooling", layerParams);
+                    layer_id[name] = id;
+                    connect(layer_id, dstNet, inpId, id, 0);
+
+                    if (!keepDims)
+                    {
+                        LayerParams squeezeLp;
+                        std::string squeezeName = name + "/squeeze";
+                        CV_Assert(layer_id.find(squeezeName) == layer_id.end());
+                        int channel_id = 3; // TF NHWC layout
+                        squeezeLp.set("axis", channel_id - 1);
+                        squeezeLp.set("end_axis", channel_id);
+                        int squeezeId = dstNet.addLayer(squeezeName, "Flatten", squeezeLp);
+                        layer_id[squeezeName] = squeezeId;
+                        connect(layer_id, dstNet, Pin(name), squeezeId, 0);
+                    }
+                    else
+                    {
+                        int order[] = {0, 3, 1, 2};  // From NHWC to OpenCV's NCHW.
+                        Pin inpId = parsePin(name);
+                        addPermuteLayer(order, name + "/nchw", inpId);
                     }
                 }
             } else {
@@ -2425,7 +2500,7 @@ void TFImporter::parseNode(const tensorflow::NodeDef& layer_)
             connectToAllBlobs(layer_id, dstNet, parsePin(layer.input(0)), id, num_inputs);
         }
         else if (type == "Abs" || type == "Tanh" || type == "Sigmoid" ||
-                 type == "Relu" || type == "Elu" ||
+                 type == "Relu" || type == "Elu" || type == "Exp" ||
                  type == "Identity" || type == "Relu6")
         {
             CV_CheckGT(num_inputs, 0, "");

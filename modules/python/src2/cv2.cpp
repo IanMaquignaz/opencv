@@ -47,6 +47,7 @@
 
 #define CV_HAS_CONVERSION_ERROR(x) (((x) == -1) && PyErr_Occurred())
 
+static PyObject* opencv_error = NULL;
 
 class ArgInfo
 {
@@ -69,13 +70,31 @@ struct PyOpenCV_Converter
     //static inline PyObject* from(const T& src);
 };
 
+// exception-safe pyopencv_to
+template<typename _Tp> static
+bool pyopencv_to_safe(PyObject* obj, _Tp& value, const ArgInfo& info)
+{
+    try
+    {
+        return pyopencv_to(obj, value, info);
+    }
+    catch (const std::exception &e)
+    {
+        PyErr_SetString(opencv_error, cv::format("Conversion error: %s, what: %s", info.name, e.what()).c_str());
+        return false;
+    }
+    catch (...)
+    {
+        PyErr_SetString(opencv_error, cv::format("Conversion error: %s", info.name).c_str());
+        return false;
+    }
+}
+
 template<typename T> static
 bool pyopencv_to(PyObject* obj, T& p, const ArgInfo& info) { return PyOpenCV_Converter<T>::to(obj, p, info); }
 
 template<typename T> static
 PyObject* pyopencv_from(const T& src) { return PyOpenCV_Converter<T>::from(src); }
-
-static PyObject* opencv_error = NULL;
 
 static bool isPythonBindingsDebugEnabled()
 {
@@ -213,6 +232,11 @@ catch (const cv::Exception &e) \
 catch (const std::exception &e) \
 { \
     PyErr_SetString(opencv_error, e.what()); \
+    return 0; \
+} \
+catch (...) \
+{ \
+    PyErr_SetString(opencv_error, "Unknown C++ exception from OpenCV code"); \
     return 0; \
 }
 
@@ -1608,13 +1632,53 @@ template<typename _Tp> static inline bool pyopencv_to_generic_vec(PyObject* obj,
     return true;
 }
 
+template<> inline bool pyopencv_to_generic_vec(PyObject* obj, std::vector<bool>& value, const ArgInfo& info)
+{
+    if(!obj || obj == Py_None)
+       return true;
+    if (!PySequence_Check(obj))
+        return false;
+    size_t n = PySequence_Size(obj);
+    value.resize(n);
+    for(size_t i = 0; i < n; i++ )
+    {
+        SafeSeqItem item_wrap(obj, i);
+        bool elem{};
+        if(!pyopencv_to(item_wrap.item, elem, info))
+            return false;
+        value[i] = elem;
+    }
+    return true;
+}
+
 template<typename _Tp> static inline PyObject* pyopencv_from_generic_vec(const std::vector<_Tp>& value)
 {
     int i, n = (int)value.size();
     PyObject* seq = PyList_New(n);
     for( i = 0; i < n; i++ )
     {
-        PyObject* item = pyopencv_from(value[i]);
+        _Tp elem = value[i];
+        PyObject* item = pyopencv_from(elem);
+        if(!item)
+            break;
+        PyList_SetItem(seq, i, item);
+    }
+    if( i < n )
+    {
+        Py_DECREF(seq);
+        return 0;
+    }
+    return seq;
+}
+
+template<> inline PyObject* pyopencv_from_generic_vec(const std::vector<bool>& value)
+{
+    int i, n = (int)value.size();
+    PyObject* seq = PyList_New(n);
+    for( i = 0; i < n; i++ )
+    {
+        bool elem = value[i];
+        PyObject* item = pyopencv_from(elem);
         if(!item)
             break;
         PyList_SetItem(seq, i, item);
@@ -2134,9 +2198,9 @@ static int convert_to_char(PyObject *o, char *dst, const ArgInfo& info)
 #include "pyopencv_generated_enums.h"
 
 #ifdef CVPY_DYNAMIC_INIT
-#define CVPY_TYPE(NAME, STORAGE, SNAME, _1, _2) CVPY_TYPE_DECLARE_DYNAMIC(NAME, STORAGE, SNAME)
+#define CVPY_TYPE(WNAME, NAME, STORAGE, SNAME, _1, _2) CVPY_TYPE_DECLARE_DYNAMIC(WNAME, NAME, STORAGE, SNAME)
 #else
-#define CVPY_TYPE(NAME, STORAGE, SNAME, _1, _2) CVPY_TYPE_DECLARE(NAME, STORAGE, SNAME)
+#define CVPY_TYPE(WNAME, NAME, STORAGE, SNAME, _1, _2) CVPY_TYPE_DECLARE(WNAME, NAME, STORAGE, SNAME)
 #endif
 #include "pyopencv_generated_types.h"
 #undef CVPY_TYPE
@@ -2144,7 +2208,6 @@ static int convert_to_char(PyObject *o, char *dst, const ArgInfo& info)
 
 #include "pyopencv_generated_types_content.h"
 #include "pyopencv_generated_funcs.h"
-
 
 static PyMethodDef special_methods[] = {
   {"redirectError", CV_PY_FN_WITH_KW(pycvRedirectError), "redirectError(onError) -> None"},
@@ -2160,7 +2223,8 @@ static PyMethodDef special_methods[] = {
 #ifdef HAVE_OPENCV_GAPI
   {"GIn", CV_PY_FN_WITH_KW(pyopencv_cv_GIn), "GIn(...) -> GInputProtoArgs"},
   {"GOut", CV_PY_FN_WITH_KW(pyopencv_cv_GOut), "GOut(...) -> GOutputProtoArgs"},
-  {"gin", CV_PY_FN_WITH_KW(pyopencv_cv_gin), "gin(...) -> GRunArgs"},
+  {"gin", CV_PY_FN_WITH_KW(pyopencv_cv_gin), "gin(...) -> ExtractArgsCallback"},
+  {"descr_of", CV_PY_FN_WITH_KW(pyopencv_cv_descr_of), "descr_of(...) -> ExtractMetaCallback"},
 #endif
   {NULL, NULL},
 };
@@ -2225,10 +2289,10 @@ static bool init_body(PyObject * m)
 #undef CVPY_MODULE
 
 #ifdef CVPY_DYNAMIC_INIT
-#define CVPY_TYPE(NAME, _1, _2, BASE, CONSTRUCTOR) CVPY_TYPE_INIT_DYNAMIC(NAME, return false, BASE, CONSTRUCTOR)
+#define CVPY_TYPE(WNAME, NAME, _1, _2, BASE, CONSTRUCTOR) CVPY_TYPE_INIT_DYNAMIC(WNAME, NAME, return false, BASE, CONSTRUCTOR)
     PyObject * pyopencv_NoBase_TypePtr = NULL;
 #else
-#define CVPY_TYPE(NAME, _1, _2, BASE, CONSTRUCTOR) CVPY_TYPE_INIT_STATIC(NAME, return false, BASE, CONSTRUCTOR)
+#define CVPY_TYPE(WNAME, NAME, _1, _2, BASE, CONSTRUCTOR) CVPY_TYPE_INIT_STATIC(WNAME, NAME, return false, BASE, CONSTRUCTOR)
     PyTypeObject * pyopencv_NoBase_TypePtr = NULL;
 #endif
     #include "pyopencv_generated_types.h"

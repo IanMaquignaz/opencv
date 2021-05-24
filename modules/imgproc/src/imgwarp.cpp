@@ -446,7 +446,7 @@ struct RemapVec_8u
     {
         int cn = _src.channels(), x = 0, sstep = (int)_src.step;
 
-        if( (cn != 1 && cn != 3 && cn != 4) || sstep > 0x8000 )
+        if( (cn != 1 && cn != 3 && cn != 4) || sstep >= 0x8000 )
             return 0;
 
         const uchar *S0 = _src.ptr(), *S1 = _src.ptr(1);
@@ -2190,7 +2190,7 @@ public:
                 int bw = std::min( bw0, dst.cols - x);
                 int bh = std::min( bh0, range.end - y);
 
-                Mat _XY(bh, bw, CV_16SC2, XY), matA;
+                Mat _XY(bh, bw, CV_16SC2, XY);
                 Mat dpart(dst, Rect(x, y, bw, bh));
 
                 for( y1 = 0; y1 < bh; y1++ )
@@ -2979,7 +2979,7 @@ public:
                 int bw = std::min( bw0, width - x);
                 int bh = std::min( bh0, range.end - y); // height
 
-                Mat _XY(bh, bw, CV_16SC2, XY), matA;
+                Mat _XY(bh, bw, CV_16SC2, XY);
                 Mat dpart(dst, Rect(x, y, bw, bh));
 
                 for( y1 = 0; y1 < bh; y1++ )
