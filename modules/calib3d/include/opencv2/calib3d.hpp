@@ -3732,8 +3732,11 @@ camera). The following process is applied:
 
 \f[
 \begin{array}{l}
+\text{newCameraMatrix}\\
 x  \leftarrow (u - {c'}_x)/{f'}_x  \\
 y  \leftarrow (v - {c'}_y)/{f'}_y  \\
+
+\\\text{Undistortion}\\
 r^2  \leftarrow x^2 + y^2 \\
 x' \leftarrow x \frac{1 + k_1 r^2 + k_2 r^4 + k_3 r^6}{1 + k_4 r^2 + k_5 r^4 + k_6 r^6}
 + 2p_1 x y + p_2(r^2 + 2 x^2)  + s_1 r^2 + s_2 r^4\\
@@ -3744,16 +3747,18 @@ s\vecthree{x''}{y''}{1} =
 {0}{R_{33}(\tau_x, \tau_y)}{-R_{23}(\tau_x, \tau_y)}
 {0}{0}{1} R(\tau_x, \tau_y) \vecthree{x'}{y'}{1}\\
 
+\\\text{Rectification}\\
 {[X\,Y\,W]} ^T  \leftarrow R^{-1}*[x'' \, y'' \, 1]^T  \\
 x'''  \leftarrow X/W  \\
 y'''  \leftarrow Y/W  \\
 
+\\\text{cameraMatrix}\\
 map_x(u,v)  \leftarrow x''' f_x + c_x  \\
 map_y(u,v)  \leftarrow y''' f_y + c_y
 \end{array}
 \f]
 where \f$(k_1, k_2, p_1, p_2[, k_3[, k_4, k_5, k_6[, s_1, s_2, s_3, s_4[, \tau_x, \tau_y]]]])\f$
-are the distortion coefficients.
+are the distortion coefficients vector distCoeffs.
 
 In case of a stereo-rectified projector-camera pair, this function is called for the projector while #initUndistortRectifyMap is called for the camera head.
 This is done after #stereoRectify, which in turn is called after #stereoCalibrate. But if the projector-camera pair
