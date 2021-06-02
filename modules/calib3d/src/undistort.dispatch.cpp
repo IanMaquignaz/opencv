@@ -245,7 +245,7 @@ void initInverseRectificationMap( InputArray _cameraMatrix, InputArray _distCoef
         p2f_objPoints,
         p2f_objPoints_undistorted,
         A,
-        distCoeffs, 
+        distCoeffs,
         cv::Mat::eye(cv::Size(3, 3), CV_64FC1), // R
         cv::Mat::eye(cv::Size(3, 3), CV_64FC1) // P = New K
     );

@@ -745,7 +745,7 @@ private:
 
 CV_InitInverseRectificationMapTest::CV_InitInverseRectificationMapTest()
 {
-    test_array[INPUT].push_back(NULL); // camera matrix 
+    test_array[INPUT].push_back(NULL); // camera matrix
     test_array[INPUT].push_back(NULL); // distortion coeffs
     test_array[INPUT].push_back(NULL); // R matrix
     test_array[INPUT].push_back(NULL); // new camera matrix
