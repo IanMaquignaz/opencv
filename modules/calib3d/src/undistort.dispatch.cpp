@@ -203,7 +203,7 @@ void initInverseRectificationMap( InputArray _cameraMatrix, InputArray _distCoef
     if( !matR.empty() )
     {
         R = Mat_<double>(matR);
-        R = R.inv(); // For inverse rectification
+        //Note, do not inverse
     }
     CV_Assert( Size(3,3) == R.size() );
 
@@ -245,7 +245,9 @@ void initInverseRectificationMap( InputArray _cameraMatrix, InputArray _distCoef
         p2f_objPoints,
         p2f_objPoints_undistorted,
         A,
-        distCoeffs
+        distCoeffs, 
+        cv::Mat::eye(cv::Size(3, 3), CV_64FC1), // R
+        cv::Mat::eye(cv::Size(3, 3), CV_64FC1) // P = New K
     );
 
     // Rectify
@@ -262,7 +264,7 @@ void initInverseRectificationMap( InputArray _cameraMatrix, InputArray _distCoef
         p2f_sourcePoints_pinHole,
         p2f_sourcePoints,
         cv::Mat::eye(cv::Size(3, 3), CV_32FC1), // K
-        cv::Mat::zeros(cv::Size(1, 5), CV_32FC1), // Distortion
+        cv::Mat::zeros(cv::Size(1, 4), CV_32FC1), // Distortion
         cv::Mat::eye(cv::Size(3, 3), CV_32FC1), // R
         Ar // New K
     );
