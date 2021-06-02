@@ -2923,16 +2923,19 @@ void initInverseRectificationMap( const Mat& _a0, const Mat& _k0, const Mat& _R0
     }
 
     // Copy camera matrix
-    fx = 1./a[0]; fy = 1./a[4]; cx = a[2]; cy = a[5];
-    //ifx = 1./a1[0]; ify = 1./a1[4];
+    fx = a[0]; fy = a[4]; cx = a[2]; cy = a[5];
+
+    // Copy new camera matrix
     ifx = a1[0]; ify = a1[4]; cxn = a1[2]; cyn = a1[5];
+
+    // Undistort
     for( int v = 0; v < sz.height; v++ )
     {
         for( int u = 0; u < sz.width; u++ )
         {
             // Convert from image to pin-hole coordinates
-            double x = (u - cx)*fx;
-            double y = (v - cy)*fy;
+            double x = (u - cx)/fx;
+            double y = (v - cy)/fy;
 
             // Undistort
             double x2 = x*x, y2 = y*y;

@@ -910,7 +910,7 @@ void CV_InitInverseRectificationMapTest::run_func()
 
 double CV_InitInverseRectificationMapTest::get_success_error_level( int /*test_case_idx*/, int /*i*/, int /*j*/ )
 {
-    return 2;
+    return 8;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////
