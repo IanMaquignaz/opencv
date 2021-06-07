@@ -642,6 +642,124 @@ TEST_F(fisheyeTest, stereoRectify)
     }
 }
 
+// TEST_F(fisheyeTest, initInverseRectifyMapNormal)
+// {
+//     const std::string folder = combine(datasets_repository_path, "calib-3_stereo_from_JY");
+
+//     cv::Size calibration_size = this->imageSize, requested_size = calibration_size;
+//     cv::Matx33d K1 = this->K, K2 = K1;
+//     cv::Mat D1 = cv::Mat(this->D), D2 = D1;
+
+//     cv::Vec3d theT = this->T;
+//     cv::Matx33d theR = this->R;
+
+//     double balance = 0.0, fov_scale = 1.1;
+//     cv::Mat R1, R2, P1, P2, Q;
+//     cv::stereoRectify(K1, D1, K2, D2, calibration_size, theR, theT, R1, R2, P1, P2, Q,
+//                       cv::CALIB_ZERO_DISPARITY, balance, requested_size);
+
+//     cv::Mat mapx_ur, mapy_ur, mapx_ir, mapy_ir;
+//     cv::initUndistortRectifyMap(K1, D1, R1, P1, requested_size, CV_32F, mapx_ur, mapy_ur);
+//     cv::initInverseRectificationMap(K1, D1, R1, P1, requested_size, CV_32F, mapx_ir, mapy_ir);
+    
+//     cv::Mat img, r;
+//     img = imread(combine(folder, cv::format("left/stereo_pair_%03d.jpg", 0)), cv::IMREAD_COLOR);
+//     r = imread(combine(folder, cv::format("right/stereo_pair_%03d.jpg", 0)), cv::IMREAD_COLOR);
+//     ASSERT_FALSE(img.empty());
+//     ASSERT_FALSE(r.empty());
+//     cv::imshow("img_l", img);
+//     cv::imshow("img_r", r);
+//     cv::waitKey();
+    
+//     for (int i = 0; i < 34; ++i)
+//     {
+//         SCOPED_TRACE(cv::format("image %d", i));
+//         std::cout << "Reg = " << combine(folder, cv::format("left/stereo_pair_%03d.jpg", i)) << std::endl;
+//         img = imread(combine(folder, cv::format("left/stereo_pair_%03d.jpg", i)), cv::IMREAD_COLOR);
+//         r = imread(combine(folder, cv::format("right/stereo_pair_%03d.jpg", i)), cv::IMREAD_COLOR);
+//         ASSERT_FALSE(img.empty());
+//         ASSERT_FALSE(r.empty());
+//         cv::imshow("img_l", img);
+//         cv::imshow("img_r", r);
+
+//         // project
+//         cv::Mat img_projected;
+//         cv::remap(img, img_projected, mapx_ir, mapy_ir, cv::INTER_LINEAR);
+//         cv::imshow("img_projected", img_projected);
+
+//         cv::Mat img_captured;
+//         cv::remap(img_projected, img_captured, mapx_ur, mapy_ur, cv::INTER_LINEAR);
+//         cv::imshow("img_captured", img_captured);
+
+//         cv::waitKey(100);
+//     }
+//     cv::destroyAllWindows();
+// }
+
+
+TEST_F(fisheyeTest, initInverseRectifyMap)
+{
+    const std::string folder = combine(datasets_repository_path, "calib-3_stereo_from_JY");
+
+    cv::Size calibration_size = this->imageSize, requested_size = calibration_size;
+    cv::Matx33d K1 = this->K, K2 = K1;
+    cv::Mat D1 = cv::Mat(this->D), D2 = D1;
+
+    cv::Vec3d theT = this->T;
+    cv::Matx33d theR = this->R;
+
+    double balance = 0.0, fov_scale = 1.1;
+    cv::Mat R1, R2, P1, P2, Q;
+    // cv::fisheye::stereoRectify(K1, D1, K2, D2, calibration_size, theR, theT, R1, R2, P1, P2, Q,
+    //                   cv::fisheye::CALIB_ZERO_DISPARITY, requested_size, balance, fov_scale);
+    R1 = cv::Mat::eye(3,3, CV_64FC1);
+    P1 = cv::Mat(this->K);
+    cv::Mat mapx_ur, mapy_ur, mapx_ir, mapy_ir;
+    cv::fisheye::initUndistortRectifyMap(K1, D1, R1, P1, requested_size, CV_32F, mapx_ur, mapy_ur);
+    cv::fisheye::initInverseRectificationMap(K1, D1, R1, P1, requested_size, CV_32F, mapx_ir, mapy_ir);
+    
+    cv::Mat img, r;
+    img = imread(combine(folder, cv::format("left/stereo_pair_%03d.jpg", 0)), cv::IMREAD_COLOR);
+    r = imread(combine(folder, cv::format("right/stereo_pair_%03d.jpg", 0)), cv::IMREAD_COLOR);
+    ASSERT_FALSE(img.empty());
+    ASSERT_FALSE(r.empty());
+    cv::imshow("img_l", img);
+    cv::imshow("img_r", r);
+    cv::waitKey();
+
+    for (int i = 0; i < 34; ++i)
+    {
+        SCOPED_TRACE(cv::format("image %d", i));
+        std::cout << "Fish = " << combine(folder, cv::format("left/stereo_pair_%03d.jpg", i)) << std::endl;
+        std::cout << D1 <<std::endl;
+        std::cout << D2 <<std::endl;
+
+        img = imread(combine(folder, cv::format("left/stereo_pair_%03d.jpg", i)), cv::IMREAD_COLOR);
+        r = imread(combine(folder, cv::format("right/stereo_pair_%03d.jpg", i)), cv::IMREAD_COLOR);
+        ASSERT_FALSE(img.empty());
+        ASSERT_FALSE(r.empty());
+        cv::imshow("img_l", img);
+        cv::imshow("img_r", r);
+
+        // project
+        cv::Mat img_projected;
+        cv::remap(img, img_projected, mapx_ir, mapy_ir, cv::INTER_LANCZOS4);
+        cv::imshow("img_projected", img_projected);
+
+        // project
+        cv::Mat img_captured_nProjection;
+        cv::remap(img, img_captured_nProjection, mapx_ur, mapy_ur, cv::INTER_LANCZOS4);
+        cv::imshow("img_captured_nProjection", img_projected);
+
+        cv::Mat img_captured;
+        cv::remap(img_projected, img_captured, mapx_ur, mapy_ur, cv::INTER_LANCZOS4);
+        cv::imshow("img_captured", img_captured);
+
+        cv::waitKey(100);
+    }
+    cv::destroyAllWindows();
+}
+
 TEST_F(fisheyeTest, stereoCalibrate)
 {
     const int n_images = 34;

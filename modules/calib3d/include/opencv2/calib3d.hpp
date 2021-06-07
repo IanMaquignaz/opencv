@@ -3975,6 +3975,38 @@ namespace fisheye
     CV_EXPORTS_W void initUndistortRectifyMap(InputArray K, InputArray D, InputArray R, InputArray P,
         const cv::Size& size, int m1type, OutputArray map1, OutputArray map2);
 
+    /** @brief Computes the projection and inverse-rectification transformation map. In essense, this is the inverse of
+    #initUndistortRectifyMap to accomodate stereo-rectification of projectors ('inverse-cameras') in projector-camera pairs.
+
+    The function computes the joint projection and inverse rectification transformation and represents the
+    result in the form of maps for remap. The projected image looks like a distorted version of the original which,
+    once projected by a projector, should visually match the original. The projector is oriented differently in the
+    coordinate space, according to R. In case of projector-camera pairs, this helps align the projector
+    (in the same manor as initUndistortRectifyMap() for the camera) to create a stereo-rectified pair. This
+    allows epipolar lines on both images to become horizontal and have the same y-coordinate (in case of a horizontally aligned projector-camera pair).
+
+    The function builds the maps for the inverse mapping algorithm that is used by remap. That
+    is, for each pixel \f$(u, v)\f$ in the destination (projected and inverse-rectified) image, the function
+    computes the corresponding coordinates in the source image (that is, in the original image from
+    camera). In case of a stereo-rectified projector-camera pair, this function is called for the
+    projector while #fisheye::initUndistortRectifyMap is called for the camera head.
+    This is done after #fisheye::stereoRectify, which in turn is called after #stereoCalibrate. 
+
+    @param K Input camera matrix \f$A=\vecthreethree{f_x}{0}{c_x}{0}{f_y}{c_y}{0}{0}{1}\f$ .
+    @param D Input vector of distortion coefficients \f$\distcoeffsfisheye\f$. If the vector is NULL/empty, the zero distortion coefficients are assumed.
+    @param R Optional rectification transformation in the object space (3x3 matrix). R1 or R2 ,
+    computed by #fisheye::stereoRectify can be passed here. If the matrix is empty, the identity transformation
+    is assumed.
+    @param P New camera matrix \f$A'=\vecthreethree{f_x'}{0}{c_x'}{0}{f_y'}{c_y'}{0}{0}{1}\f$.
+    @param size Undistorted image size.
+    @param m1type Type of the first output map that can be CV_32FC1, CV_32FC2 or CV_16SC2, see #convertMaps
+    @param map1 The first output map.
+    @param map2 The second output map.
+    */
+    CV_EXPORTS_W 
+    void initInverseRectificationMap( InputArray K, InputArray D, InputArray R, InputArray P,
+        const cv::Size& size, int m1type, OutputArray map1, OutputArray map2 );
+
     /** @brief Transforms an image to compensate for fisheye lens distortion.
 
     @param distorted image with fisheye lens distortion.
