@@ -3716,7 +3716,7 @@ void initUndistortRectifyMap(InputArray cameraMatrix, InputArray distCoeffs,
 
 The function computes the joint projection and inverse rectification transformation and represents the
 result in the form of maps for remap. The projected image looks like a distorted version of the original which,
-once projected by a projector, should visual match the original. In case of a monocular camera, newCameraMatrix
+once projected by a projector, should visually match the original. In case of a monocular camera, newCameraMatrix
 is usually equal to cameraMatrix, or it can be computed by
 #getOptimalNewCameraMatrix for a better control over scaling. In case of a projector-camera pair,
 newCameraMatrix is normally set to P1 or P2 computed by #stereoRectify .
