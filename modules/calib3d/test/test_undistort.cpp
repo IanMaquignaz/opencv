@@ -1809,35 +1809,40 @@ TEST(Calib3d_initUndistortRectifyMap, regression_14467)
 
 TEST(Calib3d_initInverseRectificationMap, regression_14468)
 {
+    /** Image size, intrinsics (k, d) and extrinsics (R) 
+     * are set based on experimentally collected projector
+     * values for a procam system.
+    */
+    
     Size size_w_h(1280, 800);
     Mat dst(size_w_h, CV_32FC2); // Reference for validation
     Mat mapxy; // Output of initInverseRectificationMap()
 
     // Camera Matrix
     double k[9]={
-        1.5393951443032472e+03, 0., 6.7491727003047140e+02,
-        0., 1.5400748240626747e+03, 5.1226968329123963e+02,
+        8.0947711018113648e+02, 0., 6.3882933229964635e+02,
+        0., 1.6237009398188927e+03, 7.0619763544371085e+02,
         0., 0., 1.
     };
     Mat _K(3, 3, CV_64F, k);
 
     // Distortion
-    // double d[5]={0,0,0,0,0}; // Zero Distortion
+    //double d[5]={0., 0., 0., 0., 0.}; // Zero Distortion
     double d[5]={ // Non-zero distortion
-        -3.4134571357400023e-03, 2.9733267766101856e-03, // K1, K2
-        3.6653586399031184e-03, -3.1960714017365702e-03, // P1, P2
-        0. // K3
+        -5.1178628758047857e-02, 5.1748772268660170e-01, // K1, K2
+        -5.4056121975068552e-03, 1.2190783502593655e-03, // P1, P2
+        -2.2413594452459269e+00 // K3
     };
     Mat _d(1, 5, CV_64F, d);
 
     // Rotation
-    //double R[9]={1., 0., 0., 0., 1., 0., 0., 0., 1.}; // Identity transform (none)
-    double R[9]={ // Random transform
-        9.6625486010428052e-01, 1.6055789378989216e-02, 2.5708706103628531e-01,
-        -8.0300261706161002e-03, 9.9944797497929860e-01, -3.2237617614807819e-02,
-       -2.5746274294459848e-01, 2.9085338870243265e-02, 9.6585039165403186e-01
-    };
-    Mat _R(3, 3, CV_64F, R);
+    double r[9]={1., 0., 0., 0., 1., 0., 0., 0., 1.}; // Identity transform (none)
+    // double r[9]={ // Random transform
+    //    9.9995102205671660e-01, 3.7507057484559587e-03, 9.1589133698526549e-03,
+    //    -3.5264823401094068e-03, 9.9969663955568844e-01, -2.4376069891780806e-02,
+    //    -9.2475623832912173e-03, 2.4342577255758804e-02, 9.9966090326796053e-01
+    // };
+    Mat _R(3, 3, CV_64F, r);
 
     // --- Validation --- //
     initInverseRectificationMap(_K, _d, _R, _K, size_w_h, CV_32FC2, mapxy, noArray());
@@ -1849,7 +1854,16 @@ TEST(Calib3d_initInverseRectificationMap, regression_14468)
     // Copy new camera matrix
     ifx = k[0]; ify = k[4]; cxn = k[2]; cyn = k[5];
 
-    // Distort Points
+    std::cout << "k\n" << std::endl;
+    for(int i=0; i<9; i++) { cout<<k[i]<<"\t"; }
+
+    std::cout << "\nd\n" << std::endl;
+    for(int i=0; i<5; i++) { cout<<d[i]<<"\t"; }
+
+    std::cout << "\nr\n" << std::endl;
+    for(int i=0; i<9; i++) { cout<<r[i]<<"\t"; }
+
+    // Undistort & Rectify Points - Ground Truth
     for( int v = 0; v < size_w_h.height; v++ )
     {
         for( int u = 0; u < size_w_h.width; u++ )
@@ -1859,16 +1873,48 @@ TEST(Calib3d_initInverseRectificationMap, regression_14468)
             double y = (v - cy)/fy;
 
             // Undistort
-            double x2 = x*x, y2 = y*y;
-            double r2 = x2 + y2;
-            double cdist = 1./(1. + (d[0] + (d[1] + d[4]*r2)*r2)*r2); // (1. + (d[5] + (d[6] + d[7]*r2)*r2)*r2) == 1 as d[5-7]=0;
-            double x_ = (x - (d[2]*2.*x*y + d[3]*(r2 + 2.*x2)))*cdist;
-            double y_ = (y - (d[3]*2.*x*y + d[2]*(r2 + 2.*y2)))*cdist;
+            double x_= x, y_=y;
+            double error=std::numeric_limits<double>::max(), error_epsilon = 0.1;
+            int iter_num_max = 5;
+            for (int iter_num=0; iter_num < iter_num_max; iter_num++) {
+                if (error < error_epsilon) { break; }
+
+                double x2 = x_*x_, y2 = y_*y_;
+                double r2 = x2 + y2;
+                double cdist = 1./(1. + (d[0] + (d[1] + d[4]*r2)*r2)*r2); // (1. + (d[5] + (d[6] + d[7]*r2)*r2)*r2) == 1. as d[5-7]=0;
+                if (cdist <= 0) { 
+                    x_ = x;
+                    y_ = y;    
+                    break;
+                }
+                double xdist = d[2]*2.*x*y + d[3]*(r2 + 2.*x2);
+                double ydist = d[3]*2.*x*y + d[2]*(r2 + 2.*y2);
+                x_ = (x_ - xdist)*cdist; 
+                y_ = (y_ - ydist)*cdist;
+
+                // Get error
+                double r4, r6, a1, a2, a3, cdist2;
+                double xd, yd, xd0, yd0;
+                r2 = x*x + y*y;
+                r4 = r2*r2;
+                r6 = r4*r2;
+                a1 = 2.*x*y;
+                a2 = r2 + 2.*x*x;
+                a3 = r2 + 2.*y*y;
+                cdist2 = 1. + d[0]*r2 + d[1]*r4 + d[4]*r6;
+                xd0 = x*cdist2 + k[2]*a1 + k[3]*a2;
+                yd0 = y*cdist2 + k[2]*a3 + k[3]*a1;
+
+                double x_proj = xd0*fx + cx;
+                double y_proj = yd0*fy + cy;
+
+                error = sqrt( pow(x_proj - u, 2) + pow(y_proj - v, 2) );
+            }
 
             // Rectify
-            double X = R[0]*x_ + R[1]*y_ + R[2];
-            double Y = R[3]*x_ + R[4]*y_ + R[5];
-            double Z = R[6]*x_ + R[7]*y_ + R[8];
+            double X = r[0]*x_ + r[1]*y_ + r[2];
+            double Y = r[3]*x_ + r[4]*y_ + r[5];
+            double Z = r[6]*x_ + r[7]*y_ + r[8];
             double x__ = X/Z;
             double y__ = Y/Z;
 
@@ -1877,8 +1923,32 @@ TEST(Calib3d_initInverseRectificationMap, regression_14468)
         }
     }
 
-    // Check Result
-    EXPECT_LE(cvtest::norm(dst, mapxy, NORM_INF), 2e-1);
+    // Remap
+    Mat mesh_uv(size_w_h, CV_32FC3);
+    for (int i = 0; i < size_w_h.height; i++)
+    {
+        for (int j = 0; j < size_w_h.width; j++)
+        {
+            mesh_uv.at<Vec3f>(i, j) = Vec3f((float)j/size_w_h.height, (float)i/size_w_h.width, ((float)i+j)/size_w_h.width);
+        }
+    }
+
+    // Get result of initInverseRectificationMap()
+    Mat mesh_uv_iIRM;
+    remap(mesh_uv, mesh_uv_iIRM, mapxy, noArray(), CV_INTER_LANCZOS4, BORDER_CONSTANT, Scalar(0,0,0));
+
+    // Get result of ground truth
+    Mat mesh_uv_GT;
+    remap(mesh_uv, mesh_uv_GT, dst, noArray(), CV_INTER_LANCZOS4, BORDER_CONSTANT, Scalar(0,0,0));
+
+    // Visualization
+    cv::imshow("mesh_uv", mesh_uv);
+    cv::imshow("mesh_uv_GT", mesh_uv_GT);
+    cv::imshow("mesh_uv_iIRM", mesh_uv_iIRM);
+    cv::waitKey();
+
+    // Compare Result
+    EXPECT_LE(cvtest::norm(mesh_uv_iIRM, mesh_uv_GT, NORM_INF), 2);
 }
 
 }} // namespace
